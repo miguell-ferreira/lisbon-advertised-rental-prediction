@@ -7,7 +7,7 @@ import folium
 from streamlit_folium import st_folium
 import json
 import unicodedata
-import branca.colormap as cm # Biblioteca para escalas de cores avançadas
+import branca.colormap as cm
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -16,7 +16,7 @@ MODELS_DIR = BASE_DIR / 'models'
 warnings.filterwarnings('ignore')
 
 # ==========================================
-# 1. CONFIGURAÇÃO VISUAL PREMIUM
+# 1. CONFIGURAÇÃO
 # ==========================================
 st.set_page_config(page_title="Urban Pressure Audit | Policy Simulator", layout="wide")
 st.markdown("""
@@ -69,12 +69,12 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
+
 # ==========================================
-# 2. CARREGAR MOTOR
+# 2. CARREGAR MODELOS
 # ==========================================
 @st.cache_resource
 def load_system():
-    # Usa o MODELS_DIR que definimos acima
     modelo = joblib.load(MODELS_DIR / 'augmented_lightgbm_model.pkl')
     dados = pd.read_pickle(MODELS_DIR / 'X_test_aug.pkl')
     dicionario = joblib.load(MODELS_DIR / 'dicionario_freguesias.pkl')
@@ -82,8 +82,11 @@ def load_system():
 
 lgbm_final, X_test_aug, freguesias_dict = load_system()
 
-# 3. MENU LATERAL COM NOMES REAIS
-st.sidebar.caption("📅 Cenário Base: Novembro de 2025 (Dados Reais do Mercado)") # <--- ADICIONA ISTO
+
+# ==========================================
+# 2. Menu Lateral
+# ==========================================
+st.sidebar.caption("📅 Cenário Base: Novembro de 2025")
 
 # Lê o teu dicionário dinâmico
 lista_freguesias = sorted(list(freguesias_dict.keys()))
@@ -99,21 +102,18 @@ modo_mapa = st.sidebar.radio(
     ('Preço Absoluto Simulado (€/m²)', 'Impacto da Política (Delta %)')
 )
 
-
-st.sidebar.markdown("### 🎛️ Alavancas Políticas")
+st.sidebar.markdown("### Mudanças")
 
 val_al = float(observacao_base.get('Densidade_AL_km2', 0.0))
 val_reab_taxa = float(observacao_base.get('Taxa_Conversao_Reabilitacao', 0.0))
 val_alv_reab = float(observacao_base.get('Stock_12M_ALV_Reabilitacao_Count', 0.0))
 
-# 2. O SEGREDO MÁXIMO: Atualizar a memória se mudarmos de Freguesia
 if 'ultima_freguesia' not in st.session_state or st.session_state['ultima_freguesia'] != freguesia_selecionada:
     st.session_state['ultima_freguesia'] = freguesia_selecionada
     st.session_state['slider_al'] = val_al
     st.session_state['slider_vol'] = val_alv_reab
     st.session_state['slider_taxa'] = val_reab_taxa
 
-# 2. CRIAR A FUNÇÃO DE CALLBACK (Obrigatório para o botão funcionar bem)
 def reset_alavancas():
     st.session_state['slider_al'] = val_al
     st.session_state['slider_vol'] = val_alv_reab
@@ -143,12 +143,15 @@ with st.sidebar.expander("Reabilitação Urbana", expanded=True):
         "Taxa de Conversão (Eficiência)", 
         0.0, 1.0, val_reab_taxa, step=0.05,
         key='slider_taxa',
-        help="Mede a velocidade e capacidade da Câmara em transformar Pedidos em Alvarás reais. 1.0 significa 100% de eficiência (zero bloqueios burocráticos)."
+        help=(
+        "Rácio entre a área de projetos de reabilitação aprovada e a área de projetos de reabilitação submetida "
+        "na janela de referência. Valores mais elevados indicam que uma maior proporção da atividade proposta "
+        "se materializa em alvarás aprovados. No entanto, esta variável não deve ser interpretada como uma medida completa "
+        "da eficiência municipal."
+    )
     )
 
 
-
-# 4. INFERÊNCIA MATEMÁTICA
 pred_log_base = lgbm_final.predict(observacao_base)
 preco_base = np.expm1(pred_log_base)[0]
 
@@ -164,51 +167,52 @@ impacto_abs = preco_simulado - preco_base
 impacto_pct = (impacto_abs / preco_base) * 100 if preco_base > 0 else 0
 
 # ==========================================
-# 5. ECRÃ CENTRAL
+# 3. ECRÃ CENTRAL
 # ==========================================
-# st.markdown("### Simulador Dinâmico de Impacto Legislativo")
 with st.expander("ℹ️ Metodologia e Escopo Temporal (Como ler este simulador)", expanded=False):
     st.markdown("""
-    **Data de Referência (Baseline):** Os valores base apresentados refletem o estado real do mercado e das pressões urbanas da freguesia no último período validado pelo modelo (**Novembro de 2025**).
+    **Data de Referência:** Os valores base apresentados refletem o estado real do mercado e das pressões urbanas da freguesia no último período validado pelo modelo (**Novembro de 2025**).
     
-    **Motor de Simulação:** O algoritmo *Augmented LightGBM* engere **43 variáveis estruturais** em tempo real (incluindo transportes, censos, e atividade económica via satélite). 
-    Ao manipular as *Alavancas Políticas* no painel lateral, o simulador recalcula o valor de mercado isolando o choque dessa medida, mantendo as restantes 42 variáveis rigorosamente congeladas na sua realidade de 2025.
+    **Motor de Simulação:** O algoritmo *Augmented LightGBM* treinado com variáveis estruturais, sociodemográficas, turísticas, urbanísticas e de atividade económica.
+                
+    Ao manipular as **alavancas políticas** no painel lateral, o simulador recalcula o preço anunciado previsto para a freguesia selecionada, mantendo as restantes variáveis constantes.
+                
+    **Nota de interpretação:** Os resultados devem ser lidos como simulações preditivas *ceteris paribus*. O simulador não estima efeitos causais diretos, mas sim a forma como o modelo ajusta a previsão perante alterações nas variáveis selecionadas.
     """)
 
-# Caixas de Impacto (Kpis Limpos e Diretos)
+# (Kpis)
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.info("📌 **BASELINE:** Preço estimado pelo modelo para as condições reais de hoje, sem mexer na lei.")
+    st.info("📌 **BASELINE:** Preço estimado pelo modelo para as condições reais observadas no período de referência.")
     st.metric(
         label="Preço Preditivo Base", 
         value=f"{preco_base:.2f} €/m²"
     )
 with col2:
-    st.info("🎯 **CENÁRIO:** Novo preço estimado com as alterações aplicadas no menu lateral.")
+    st.info("🎯 **CENÁRIO:** Novo preço estimado após aplicar as alterações simuladas.")
     st.metric(
         label="Preço Simulado", 
         value=f"{preco_simulado:.2f} €/m²", 
         delta=f"{impacto_pct:.2f}%"
     )
 with col3:
-    st.info("💶 **IMPACTO:** Variação isolada atribuída exclusivamente à mudança legislativa.")
+    st.info("💶 **IMPACTO:** Variação prevista pelo modelo para o cenário simulado, mantendo as restantes variáveis constantes.")
     st.metric(label="Variação Absoluta", value=f"{impacto_abs:.2f} €/m²", delta_color="inverse")
 
-# 1. Função para esmagar diferenças de texto (tira acentos, espaços e põe maiúsculas)
 def padronizar_nome(nome):
     nome = str(nome).strip().upper()
     nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
     return nome
 
-# 2. Preparar matriz com TODAS as freguesias
+# 1. Preparar matriz com todas as freguesias
 indices_alvo = list(freguesias_dict.values())
 nomes_alvo = list(freguesias_dict.keys())
 matriz_mapa = X_test_aug.loc[indices_alvo].copy()
 
-# Guardar os preços base (BASELINE) para calcular o delta depois
+# 2. Guardar os preços base (BASELINE) para calcular o delta depois
 precos_baseline_lisboa = np.expm1(lgbm_final.predict(matriz_mapa))
 
-# 3. Injetar a política simulada APENAS na freguesia selecionada
+# 3. Injetar a política simulada apenas na freguesia selecionada
 matriz_mapa.loc[idx_alvo, 'Densidade_AL_km2'] = nova_densidade_al
 matriz_mapa.loc[idx_alvo, 'Taxa_Conversao_Reabilitacao'] = nova_taxa_reab
 matriz_mapa.loc[idx_alvo, 'Stock_12M_ALV_Reabilitacao_Count'] = novo_alv_reab
@@ -217,26 +221,22 @@ matriz_mapa.loc[idx_alvo, 'Stock_12M_ALV_Reabilitacao_Count'] = novo_alv_reab
 precos_simulados_lisboa = np.expm1(lgbm_final.predict(matriz_mapa))
 
 # Calcular o Delta % para todas as freguesias (Será 0% para todas exceto a alvo)
-# Usamos (Novo - Antigo) / Antigo * 100
+# (Novo - Antigo) / Antigo * 100
 deltas_percentuais = ((precos_simulados_lisboa - precos_baseline_lisboa) / precos_baseline_lisboa) * 100
 
-# 5. Criar o DataFrame unificado para o mapa
 df_mapa = pd.DataFrame({
     'Freguesia_Original': nomes_alvo, 
     'Preço Absoluto': precos_simulados_lisboa,
     'Impacto (Delta %)': deltas_percentuais
 })
 
-# Aplicar a padronização das chaves no DataFrame
 df_mapa['Chave_Match'] = df_mapa['Freguesia_Original'].apply(padronizar_nome)
 
-# 6. Carregar o GeoJSON original e preparar os Tooltips
 geojson_path = BASE_DIR / 'data' / 'processed' / 'lisboa_poligonos_caop.geojson'
 
 with open(geojson_path, 'r', encoding='utf-8') as f:
     mapa_geojson = json.load(f)
 
-# Criar um dicionário para busca rápida de tooltips
 tooltip_dict = df_mapa.set_index('Chave_Match')[['Freguesia_Original', 'Preço Absoluto', 'Impacto (Delta %)']].to_dict('index')
 
 for feature in mapa_geojson['features']:
@@ -244,7 +244,6 @@ for feature in mapa_geojson['features']:
     chave_m = padronizar_nome(nome_geo)
     feature['properties']['Chave_Match'] = chave_m
     
-    # Adicionar os dados reais ao GeoJSON para o Tooltip ler
     if chave_m in tooltip_dict:
         feature['properties']['NomeDisplay'] = tooltip_dict[chave_m]['Freguesia_Original']
         feature['properties']['PrecoDisplay'] = f"{tooltip_dict[chave_m]['Preço Absoluto']:.2f} €/m²"
@@ -260,10 +259,8 @@ col_mapa, col_insights = st.columns([7, 3], gap="large")
 with col_mapa:
     st.subheader("Auditoria Territorial")
     
-    # 6. Configurar o Mapa
     mapa_lisboa = folium.Map(location=[38.73, -9.14], zoom_start=12, tiles="CartoDB positron")
     
-    # (Verificar se a variável modo_mapa existe, se não, assumir Preço Absoluto)
     if 'modo_mapa' not in locals(): modo_mapa = 'Preço Absoluto Simulado (€/m²)'
 
     if modo_mapa == 'Preço Absoluto Simulado (€/m²)':
@@ -302,11 +299,10 @@ with col_mapa:
     )
 
     chave_atualizacao = f"mapa_{nova_densidade_al}_{nova_taxa_reab}_{novo_alv_reab}_{modo_mapa}"
-    # Ajustei a altura para 450 para alinhar melhor com o texto lateral
     st_folium(mapa_lisboa, use_container_width=True, height=450, returned_objects=[], key=chave_atualizacao)
 
 # ==========================================
-# 6. MOTOR DE INSIGHTS (Explicação Dinâmica)
+# 4. INSIGHTS (Interpretações)
 # ==========================================
 
 with col_insights:
@@ -315,32 +311,60 @@ with col_insights:
     with st.container():
         insights_gerados = 0
         
-        # 1. AL (Métrica Instantânea / Fotografia)
+        # 1. AL
         if nova_densidade_al != val_al:
             if nova_densidade_al < val_al:
-                st.success(f"**🏨 Descompressão Turística:** Reduzir a pegada atual para {nova_densidade_al:.0f} AL/km² liberta, no imediato, imóveis do canal turístico para o mercado residencial longo, baixando o teto especulativo.")
+                st.success(
+                    f"**Menor Pressão Turística:** Reduzir a densidade de AL para {nova_densidade_al:.0f} unidades/km² "
+                    f"está associado, no modelo, a uma redução das expectativas de preço anunciado. "
+                    f"Esta simulação deve ser interpretada como uma redução ceteris paribus da pressão turística, "
+                    f"e não como prova de que os imóveis regressam imediatamente ao mercado de arrendamento de longa duração."
+                )
             else:
-                st.error(f"**📈 Saturação Turística:** Atingir a marca de {nova_densidade_al:.0f} AL/km² sinaliza uma forte canibalização da habitação. O modelo precifica esta escassez residencial com subidas acentuadas.")
+                st.error(
+                f"**Maior Pressão Turística:** Aumentar a densidade de AL para {nova_densidade_al:.0f} unidades/km² "
+                f"eleva o preço anunciado previsto pelo modelo, refletindo uma maior pressão turística sobre o mercado residencial. "
+                f"Em níveis muito elevados de densidade, o efeito marginal pode tornar-se menor devido a efeitos de saturação."
+            )
             insights_gerados += 1
 
-        # 2. ALVARÁS (Métrica Acumulada Anual / 12 Meses)
+        # 2. ALVARÁS
         if novo_alv_reab != val_alv_reab:
             if novo_alv_reab > val_alv_reab:
-                st.info(f"**🏗️ Choque de Oferta (Ano):** Subir a meta para {novo_alv_reab:.0f} licenças aprovadas num ciclo de 12 meses injeta habitação renovada contínua. Este stock anual ajuda a diluir a pressão da procura.")
+                st.info(
+                f"**Pipeline de Reabilitação:** Aumentar o stock a 12 meses para {novo_alv_reab:.0f} alvarás aprovados "
+                f"sinaliza uma maior intensidade recente de reabilitação urbana. No modelo, este aumento pode moderar "
+                f"as expectativas de preço anunciado, ao reduzir a incerteza sobre a oferta futura de habitação renovada. "
+                f"No entanto, estes alvarás não representam necessariamente fogos já disponíveis no mercado."
+            )
             else:
-                st.warning(f"**🚧 Estrangulamento (Ano):** Uma meta anual baixa de {novo_alv_reab:.0f} licenças estagna a renovação do parque. Esta retenção do stock a 12 meses força os preços a subir por escassez física.")
+                st.warning(
+                f"**Pipeline de Reabilitação Mais Fraco:** Reduzir o stock a 12 meses para {novo_alv_reab:.0f} alvarás aprovados "
+                f"sugere menor atividade recente de reabilitação materializada. O modelo pode associar este cenário "
+                f"a maior pressão sobre o stock existente, mas esta leitura não deve ser interpretada como prova direta "
+                f"de escassez física de habitação."
+            )
             insights_gerados += 1
 
-        # 3. EFICIÊNCIA (Métrica de Fluxo da Máquina Pública)
+        # 3. TAXA DE CONVERSÃO DE REABILITAÇÃO
         if nova_taxa_reab != val_reab_taxa:
             if nova_taxa_reab > val_reab_taxa:
-                st.success(f"**⚡ Máquina Municipal:** Operar com {nova_taxa_reab*100:.0f}% de taxa de conversão de pedidos em obra reduz o 'risco-burocrático'. O investimento flui mais rápido para a habitação tangível.")
+                st.success(
+                    f"**Maior Taxa de Conversão:** Uma taxa de conversão de {nova_taxa_reab*100:.0f}% indica que uma maior proporção "
+                    f"da área de reabilitação submetida se transforma em alvarás aprovados. No modelo, taxas de conversão mais elevadas "
+                    f"tendem a moderar ou estabilizar as expectativas de preço anunciado, possivelmente porque a transformação urbana "
+                    f"se torna mais tangível e menos especulativa."
+                )
             else:
-                st.error(f"**🐌 Risco-Burocrático:** Uma taxa de conversão baixa ({nova_taxa_reab*100:.0f}%) funciona como um 'imposto invisível'. O mercado repercute os meses de espera da Câmara no preço final pago pelo cidadão.")
+                st.warning(
+                    f"**Menor Taxa de Conversão:** Uma taxa de conversão de {nova_taxa_reab*100:.0f}% indica menor materialização "
+                    f"dos projetos de reabilitação submetidos. O modelo pode associar este cenário a maior incerteza e a preços mais "
+                    f"orientados por expectativas, mas esta leitura deve ser entendida como uma associação preditiva, não como um efeito causal direto."
+                )
             insights_gerados += 1
 
         if insights_gerados == 0:
-            st.info("💡 **Aguardando Simulação:** Ajuste as Alavancas Políticas para visualizar a explicação causal do modelo.")
+            st.info("💡 **A Aguardar Simulação:** Ajuste as alavancas políticas para visualizar a interpretação preditiva do modelo")
 
     st.markdown(
         f"<div style='text-align: right; color: #94A3B8; font-size: 0.75rem; margin-top: 2rem;'>"
