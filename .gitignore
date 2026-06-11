@@ -23,3 +23,5 @@ venv/
 # --- Sistema ---
 .DS_Store
 Thumbs.db
+notebooks/CRISP-ML.ipynb
+notebooks/VAR_RNAL.ipynb
