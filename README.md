@@ -99,7 +99,7 @@ A subpasta supplementary_analysis/ice_plots/ gera ICE plots adicionais para vár
 
 Estes gráficos complementam os ICE plots apresentados na tese e permitem analisar efeitos não lineares, padrões de saturação e heterogeneidade nas previsões do modelo.
 
-### Nota sobre a escala dos ICE plots
+### ***Nota sobre a escala dos ICE plots***
 
 O modelo foi treinado com a variável dependente transformada em logaritmo. Por isso, os ICE plots representam a previsão na escala logarítmica do preço anunciado por m².
 
@@ -109,12 +109,6 @@ Assim, estes gráficos devem ser interpretados como variações proporcionais es
 A subpasta **supplementary_analysis/residual_analysis/** contém a análise de resíduos do modelo no test set de 2025.
 
 O objetivo desta análise é avaliar se o modelo apresenta padrões sistemáticos de erro no período mais recente.
-
-O residual plot representa:
-
-- residual = actual price_m2 - predicted price_m2
-
-ao longo dos valores previstos pelo modelo.
 
 Ao contrário dos ICE plots, a análise de resíduos é feita na escala original, em euros por metro quadrado, depois de aplicar a transformação inversa ao target.
 Interpretação da Análise de Resíduos
@@ -131,10 +125,10 @@ As análises suplementares dependem dos objetos já guardados na pasta **models/
 
 Ficheiros relevantes:
 
-- models/augmented_lightgbm_model.pkl
-- models/X_test_aug.pkl
-- models/y_test_aug.pkl
-- models/metadata_test_aug.pkl
+* `models/augmented_lightgbm_model.pkl`
+* `models/X_test_aug.pkl`
+* `models/y_test_aug.pkl`
+* `models/metadata_test_aug.pkl`
 
 Para correr os ICE plots:
 
