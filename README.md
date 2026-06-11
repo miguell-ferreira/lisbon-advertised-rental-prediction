@@ -73,6 +73,7 @@ Estas análises foram adicionadas como material suplementar, sobretudo para resp
 
 A estrutura é a seguinte:
 
+```text
 supplementary_analysis/ 
 │ 
 ├── ice_plots/ 
@@ -91,6 +92,7 @@ supplementary_analysis/
    ├── recover_y_test_aug.py 
    └── outputs/ 
       └── residual_plot_predicted_vs_residuals_eur.png            
+```
 
 ### Supplementary ICE Plots
 A subpasta supplementary_analysis/ice_plots/ gera ICE plots adicionais para várias variáveis do modelo Augmented LightGBM.
